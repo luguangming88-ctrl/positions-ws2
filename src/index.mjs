@@ -40,6 +40,7 @@ export class PositionsDO {
       this.apiId = url.searchParams.get('apiId') || ''
       ;(async () => {
         try {
+          console.log('start-subscription', { apiId: this.apiId })
           await this.loadCredentials()
           await this.loadStrategies()
           this.connectWS()
@@ -86,6 +87,7 @@ export class PositionsDO {
       const sign = await hmacSHA256Base64(ts + 'GET' + '/users/self/verify', api_secret)
       ws.send(JSON.stringify({ op: 'login', args: [{ apiKey: api_key, passphrase, timestamp: ts, sign }] }))
       ws.send(JSON.stringify({ op: 'subscribe', args: [{ channel: 'positions', instType: 'SWAP' }] }))
+      console.log('private-ws-open', { apiId: this.apiId })
     }
     ws.onmessage = (ev) => this.onMessage(ev).catch(() => {})
     ws.onclose = () => setTimeout(() => this.connectWS(), 2000)
@@ -148,6 +150,7 @@ export class PositionsDO {
             const size = Math.abs(parseFloat(p.pos || '0'))
             setTimeout(()=>{ this.openHedge(s, symbol, posSide, size).catch(()=>{}) }, 5000)
             this.lastAction.set(instId, Date.now())
+            console.log('hedge-trigger', { symbol, uplRatio, lossThresh, dir, posSide, size })
             continue
           }
         }
@@ -155,6 +158,7 @@ export class PositionsDO {
         if (uplRatio >= profitThresh) {
           setTimeout(()=>{ this.closePosition(s, symbol, posSide).catch(()=>{}) }, 2000)
           this.lastAction.set(instId, Date.now())
+          console.log('take-profit-trigger', { symbol, uplRatio, profitThresh, posSide })
         }
       }
     }

@@ -36,11 +36,15 @@ export class PositionsDO {
     const url = new URL(request.url)
     if (url.pathname === '/start') {
       this.apiId = url.searchParams.get('apiId') || ''
-      await this.loadCredentials()
-      await this.loadStrategies()
-      this.connectWS()
-      if (this.timer) clearInterval(this.timer)
-      this.timer = setInterval(() => this.loadStrategies().catch(() => {}), 60000)
+      ;(async () => {
+        try {
+          await this.loadCredentials()
+          await this.loadStrategies()
+          this.connectWS()
+          if (this.timer) clearInterval(this.timer)
+          this.timer = setInterval(() => this.loadStrategies().catch(() => {}), 60000)
+        } catch (_) {}
+      })()
       return new Response('started')
     }
     if (url.pathname === '/stop') {

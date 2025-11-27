@@ -8,5 +8,5 @@ bindings = [{ name = "POSITIONS_DO", class_name = "PositionsDO" }]
 
 [[migrations]]
 tag = "v1"
-new_classes = ["PositionsDO"]
+new_sqlite_classes = ["PositionsDO"]
 

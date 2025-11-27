@@ -151,8 +151,9 @@ export class PositionsDO {
             continue
           }
         }
-        if (uplRatio >= s.profit_ratio) {
-          await this.closePosition(s, symbol, posSide)
+        const profitThresh = (()=>{ const v = Number(s.profit_ratio||0); return v>1? v/100 : v })()
+        if (uplRatio >= profitThresh) {
+          setTimeout(()=>{ this.closePosition(s, symbol, posSide).catch(()=>{}) }, 2000)
           this.lastAction.set(instId, Date.now())
         }
       }

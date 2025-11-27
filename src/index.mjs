@@ -25,10 +25,12 @@ export class PositionsDO {
     this.state = state
     this.env = env
     this.ws = null
+    this.pub = null
     this.apiId = ''
     this.creds = null
     this.strategies = new Map()
     this.lastAction = new Map()
+    this.candleDir = new Map()
     this.timer = null
   }
 
@@ -71,6 +73,7 @@ export class PositionsDO {
       map.set(s.symbol, arr)
     }
     this.strategies = map
+    this.connectPublicWS()
   }
 
   connectWS() {
@@ -87,6 +90,35 @@ export class PositionsDO {
     ws.onmessage = (ev) => this.onMessage(ev).catch(() => {})
     ws.onclose = () => setTimeout(() => this.connectWS(), 2000)
     ws.onerror = () => setTimeout(() => this.connectWS(), 2000)
+  }
+
+  connectPublicWS() {
+    if (this.pub) return
+    const instIds = Array.from(this.strategies.keys()).map(x => x.replace(':USDT','-SWAP').replace('/','-'))
+    if (!instIds.length) return
+    const ws = new WebSocket('wss://ws.okx.com/ws/v5/public')
+    this.pub = ws
+    ws.onopen = () => {
+      const args = instIds.map(instId => ({ channel: 'candle1H', instId }))
+      ws.send(JSON.stringify({ op: 'subscribe', args }))
+    }
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data)
+        if (msg.arg?.channel && String(msg.arg.channel).startsWith('candle')) {
+          const instId = msg.arg.instId
+          const sym = instId.replace('-SWAP','').replace('-', '/')+':USDT'
+          const d = msg.data && msg.data[0]
+          if (d && d.length >= 5) {
+            const o = parseFloat(d[1])
+            const c = parseFloat(d[4])
+            this.candleDir.set(sym, c >= o ? 'up' : 'down')
+          }
+        }
+      } catch (_) {}
+    }
+    ws.onclose = () => { this.pub = null; setTimeout(()=>this.connectPublicWS(), 2000) }
+    ws.onerror = () => { this.pub = null; setTimeout(()=>this.connectPublicWS(), 2000) }
   }
 
   async onMessage(ev) {
@@ -108,10 +140,16 @@ export class PositionsDO {
         const now = Date.now()
         const last = this.lastAction.get(instId) || 0
         if (now - last < 2000) continue
-        if (s.loss_stop_ratio && uplRatio <= -s.loss_stop_ratio) {
-          await this.openHedge(s, symbol, posSide, Math.abs(parseFloat(p.pos || '0')))
-          this.lastAction.set(instId, Date.now())
-          continue
+        const lossThresh = (()=>{ const v = Number(s.loss_stop_ratio||0); return v>1? v/100 : v })()
+        if (lossThresh && uplRatio <= -lossThresh) {
+          const dir = this.candleDir.get(symbol)
+          const needOpp = (posSide === 'long' && dir === 'down') || (posSide === 'short' && dir === 'up')
+          if (needOpp) {
+            const size = Math.abs(parseFloat(p.pos || '0'))
+            setTimeout(()=>{ this.openHedge(s, symbol, posSide, size).catch(()=>{}) }, 5000)
+            this.lastAction.set(instId, Date.now())
+            continue
+          }
         }
         if (uplRatio >= s.profit_ratio) {
           await this.closePosition(s, symbol, posSide)

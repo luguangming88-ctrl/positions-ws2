@@ -227,6 +227,12 @@ export class PositionsDO {
           const needOpp = (posSide === 'long' && dir === 'down') || (posSide === 'short' && dir === 'up')
           if (needOpp) {
             const size = Math.abs(parseFloat(p.pos || '0'))
+            postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+              strategy_id: s.id,
+              level: 'warning',
+              message: 'WS事件：对冲触发条件满足，5秒后下单',
+              data: { symbol, uplRatio, lossThresh, dir, posSide, size }
+            }).catch(()=>{})
             setTimeout(()=>{ this.openHedge(s, symbol, posSide, size).catch(()=>{}) }, 5000)
             this.lastAction.set(instId, Date.now())
             console.log('hedge-trigger', { symbol, uplRatio, lossThresh, dir, posSide, size })
@@ -237,6 +243,12 @@ export class PositionsDO {
         if (uplRatio >= profitThresh) {
           const jitter = Math.floor(Math.random() * 200)
           const size = Math.abs(parseFloat(p.pos || '0'))
+          postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+            strategy_id: s.id,
+            level: 'info',
+            message: 'WS事件：止盈触发条件满足，0.5秒后平仓',
+            data: { symbol, uplRatio, profitThresh, posSide }
+          }).catch(()=>{})
           setTimeout(()=>{ this.closePosition(s, symbol, posSide).catch(()=>{}) }, 500 + jitter)
           setTimeout(()=>{
             const dir = this.candleDir.get(symbol)

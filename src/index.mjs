@@ -61,6 +61,7 @@ export class PositionsDO {
     this.lastAction = new Map()
     this.candleDir = new Map()
     this.timer = null
+    this.diag = { last: null }
   }
 
   async fetch(request) {
@@ -96,7 +97,23 @@ export class PositionsDO {
         try { await this.loadStrategies() } catch (_) {}
       }
       const symbols = Array.from(this.strategies.keys())
-      const body = { apiId: this.apiId, privateConnected: !!this.ws, publicConnected: !!this.pub, symbols }
+      const body = {
+        apiId: this.apiId,
+        privateConnected: !!this.ws,
+        publicConnected: !!this.pub,
+        symbols,
+        hasSupabaseEnv: !!(this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY),
+        credsPresent: !!this.creds,
+      }
+      return cors(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+    }
+    if (url.pathname === '/diag') {
+      const body = {
+        apiId: this.apiId,
+        hasSupabaseEnv: !!(this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY),
+        credsPresent: !!this.creds,
+        symbols: Array.from(this.strategies.keys()),
+      }
       return cors(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
     }
     if (url.pathname === '/start-symbol') {

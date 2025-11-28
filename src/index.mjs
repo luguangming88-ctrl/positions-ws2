@@ -41,6 +41,14 @@ async function postJsonRetry(url, headers, body, opts = {}) {
   }
 }
 
+async function listActiveApiIds(env) {
+  const headers = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }
+  const rows = await getJson(`${env.SUPABASE_URL}/rest/v1/strategies?status=eq.running&select=api_credential_id`, headers)
+  const set = new Set()
+  for (const r of rows || []) { if (r.api_credential_id) set.add(r.api_credential_id) }
+  return Array.from(set)
+}
+
 export class PositionsDO {
   constructor(state, env) {
     this.state = state
@@ -293,7 +301,16 @@ export default {
     const obj = env.POSITIONS_DO.get(id)
     return obj.fetch(req)
   },
-  async scheduled(event, env, ctx) {}
+  async scheduled(event, env, ctx) {
+    try {
+      const ids = await listActiveApiIds(env)
+      for (const apiId of ids) {
+        const id = env.POSITIONS_DO.idFromName(apiId)
+        const obj = env.POSITIONS_DO.get(id)
+        ctx.waitUntil(obj.fetch(new Request(`https://dummy/start?apiId=${apiId}`)))
+      }
+    } catch (_) {}
+  }
 }
 
 function cors(body, init = {}) {

@@ -10,3 +10,6 @@ bindings = [{ name = "POSITIONS_DO", class_name = "PositionsDO" }]
 tag = "v1"
 new_sqlite_classes = ["PositionsDO"]
 
+[triggers]
+crons = ["*/10 * * * *"]
+

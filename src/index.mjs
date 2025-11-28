@@ -71,6 +71,12 @@ export class PositionsDO {
       this.apiId = url.searchParams.get('apiId') || ''
       ;(async () => {
         try {
+          postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+            strategy_id: null,
+            level: 'info',
+            message: 'WS事件：收到启动订阅请求',
+            data: { apiId: this.apiId }
+          }).catch(()=>{})
           console.log('start-subscription', { apiId: this.apiId })
           await this.loadCredentials()
           await this.loadStrategies()
@@ -112,6 +118,14 @@ export class PositionsDO {
     const headers = { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` }
     const data = await getJson(`${this.env.SUPABASE_URL}/rest/v1/okx_api_credentials?id=eq.${this.apiId}&select=*`, headers)
     this.creds = data?.[0]
+    if (!this.creds) {
+      postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+        strategy_id: null,
+        level: 'error',
+        message: 'WS事件：未找到账户凭证，订阅失败',
+        data: { apiId: this.apiId }
+      }).catch(()=>{})
+    }
   }
 
   async loadStrategies() {
@@ -138,6 +152,12 @@ export class PositionsDO {
       ws.send(JSON.stringify({ op: 'login', args: [{ apiKey: api_key, passphrase, timestamp: ts, sign }] }))
       ws.send(JSON.stringify({ op: 'subscribe', args: [{ channel: 'positions', instType: 'SWAP' }] }))
       console.log('private-ws-open', { apiId: this.apiId })
+      postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+        strategy_id: null,
+        level: 'info',
+        message: 'WS事件：私有WS已连接',
+        data: { apiId: this.apiId }
+      }).catch(()=>{})
     }
     ws.onmessage = (ev) => this.onMessage(ev).catch(() => {})
     ws.onclose = () => setTimeout(() => this.connectWS(), 2000)

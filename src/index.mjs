@@ -57,6 +57,7 @@ export class PositionsDO {
 
   async fetch(request) {
     const url = new URL(request.url)
+    this.apiId = url.searchParams.get('apiId') || this.apiId || ''
     if (request.method === 'OPTIONS') return cors('', { status: 204 })
     if (url.pathname === '/start') {
       this.apiId = url.searchParams.get('apiId') || ''
@@ -77,6 +78,9 @@ export class PositionsDO {
       return cors('refreshed')
     }
     if (url.pathname === '/status') {
+      if (!this.strategies.size && this.apiId) {
+        try { await this.loadStrategies() } catch (_) {}
+      }
       const symbols = Array.from(this.strategies.keys())
       const body = { apiId: this.apiId, privateConnected: !!this.ws, publicConnected: !!this.pub, symbols }
       return cors(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })

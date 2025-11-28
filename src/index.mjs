@@ -19,6 +19,12 @@ async function getJson(url, headers) {
   return await r.json()
 }
 
+async function getRaw(url, headers) {
+  const r = await fetch(url, { headers })
+  const text = await r.text()
+  return { status: r.status, text }
+}
+
 async function postJson(url, headers, body) {
   const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
   return await r.json()
@@ -115,6 +121,12 @@ export class PositionsDO {
         symbols: Array.from(this.strategies.keys()),
       }
       return cors(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+    }
+    if (url.pathname === '/supa-check') {
+      const headers = { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` }
+      const q1 = await getRaw(`${this.env.SUPABASE_URL}/rest/v1/okx_api_credentials?id=eq.${this.apiId}&select=*`, headers)
+      const q2 = await getRaw(`${this.env.SUPABASE_URL}/rest/v1/strategies?api_credential_id=eq.${this.apiId}&select=id,symbol,status`, headers)
+      return cors(JSON.stringify({ apiId: this.apiId, okx_api_credentials: q1, strategies: q2 }), { headers: { 'Content-Type': 'application/json' } })
     }
     if (url.pathname === '/start-symbol') {
       const symbol = url.searchParams.get('symbol') || ''

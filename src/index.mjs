@@ -99,6 +99,10 @@ export class PositionsDO {
       return cors('refreshed')
     }
     if (url.pathname === '/status') {
+      if (this.apiId && !this.creds && this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY) {
+        try { await this.loadCredentials() } catch (_) {}
+        if (this.creds && !this.ws) { try { this.connectWS() } catch (_) {} }
+      }
       if (!this.strategies.size && this.apiId) {
         try { await this.loadStrategies() } catch (_) {}
       }
@@ -114,6 +118,9 @@ export class PositionsDO {
       return cors(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
     }
     if (url.pathname === '/diag') {
+      if (this.apiId && !this.creds && this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY) {
+        try { await this.loadCredentials() } catch (_) {}
+      }
       const body = {
         apiId: this.apiId,
         hasSupabaseEnv: !!(this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY),

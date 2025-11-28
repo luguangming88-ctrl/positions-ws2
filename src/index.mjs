@@ -183,6 +183,14 @@ export class PositionsDO {
       map.set(s.symbol, arr)
     }
     this.strategies = map
+    try {
+      await postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+        strategy_id: null,
+        level: 'info',
+        message: 'WS事件：策略集合已刷新',
+        data: { apiId: this.apiId, count: map.size, symbols: Array.from(map.keys()) }
+      })
+    } catch (_) {}
     this.connectPublicWS()
   }
 

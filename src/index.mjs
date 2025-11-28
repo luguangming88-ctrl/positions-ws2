@@ -3,6 +3,10 @@ function instIdToSymbol(instId) {
   return `${base}:USDT`
 }
 
+function symbolToInstId(symbol) {
+  return symbol.replace(':USDT','-SWAP').replace('/','-')
+}
+
 async function hmacSHA256Base64(message, secret) {
   const enc = new TextEncoder()
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
@@ -66,6 +70,22 @@ export class PositionsDO {
         } catch (_) {}
       })()
       return new Response('started')
+    }
+    if (url.pathname === '/refresh') {
+      await this.loadStrategies()
+      return new Response('refreshed')
+    }
+    if (url.pathname === '/status') {
+      const symbols = Array.from(this.strategies.keys())
+      const body = { apiId: this.apiId, privateConnected: !!this.ws, publicConnected: !!this.pub, symbols }
+      return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+    }
+    if (url.pathname === '/start-symbol') {
+      const symbol = url.searchParams.get('symbol') || ''
+      if (!symbol) return new Response('symbol required', { status: 400 })
+      const instId = symbolToInstId(symbol)
+      await this.subscribePublic(instId)
+      return new Response('symbol-started')
     }
     if (url.pathname === '/stop') {
       if (this.ws) this.ws.close()
@@ -138,6 +158,35 @@ export class PositionsDO {
     }
     ws.onclose = () => { this.pub = null; setTimeout(()=>this.connectPublicWS(), 2000) }
     ws.onerror = () => { this.pub = null; setTimeout(()=>this.connectPublicWS(), 2000) }
+  }
+
+  async subscribePublic(instId) {
+    if (this.pub && this.pub.readyState === 1) {
+      this.pub.send(JSON.stringify({ op: 'subscribe', args: [{ channel: 'candle1H', instId }] }))
+      return
+    }
+    const ws = new WebSocket('wss://ws.okx.com/ws/v5/public')
+    this.pub = ws
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ op: 'subscribe', args: [{ channel: 'candle1H', instId }] }))
+    }
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data)
+        if (msg.arg?.channel && String(msg.arg.channel).startsWith('candle')) {
+          const i = msg.arg.instId
+          const sym = instIdToSymbol(i)
+          const d = msg.data && msg.data[0]
+          if (d && d.length >= 5) {
+            const o = parseFloat(d[1])
+            const c = parseFloat(d[4])
+            this.candleDir.set(sym, c >= o ? 'up' : 'down')
+          }
+        }
+      } catch (_) {}
+    }
+    ws.onclose = () => { this.pub = null; setTimeout(()=>this.subscribePublic(instId), 2000) }
+    ws.onerror = () => { this.pub = null; setTimeout(()=>this.subscribePublic(instId), 2000) }
   }
 
   async onMessage(ev) {

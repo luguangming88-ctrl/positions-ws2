@@ -228,7 +228,13 @@ export class PositionsDO {
         const profitThresh = (()=>{ const v = Number(s.profit_ratio||0); return v>1? v/100 : v })()
         if (uplRatio >= profitThresh) {
           const jitter = Math.floor(Math.random() * 200)
+          const size = Math.abs(parseFloat(p.pos || '0'))
           setTimeout(()=>{ this.closePosition(s, symbol, posSide).catch(()=>{}) }, 500 + jitter)
+          setTimeout(()=>{
+            const dir = this.candleDir.get(symbol)
+            const side = dir === 'up' ? 'buy' : 'sell'
+            this.openReentry(s, symbol, side, size).catch(()=>{})
+          }, 7000)
           this.lastAction.set(instId, Date.now())
           console.log('take-profit-trigger', { symbol, uplRatio, profitThresh, posSide })
         }
@@ -262,6 +268,20 @@ export class PositionsDO {
       level: 'warning',
       message: 'WS事件：达到对冲亏损阈值，开对冲仓',
       data: { symbol, hedgeSide: side, size }
+    })
+  }
+
+  async openReentry(s, symbol, side, size) {
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` }
+    await postJsonRetry(`${this.env.SUPABASE_URL}/functions/v1/okx-trading`, headers, {
+      action: 'placeOrder',
+      data: { strategyId: s.id, symbol, side, orderType: 'market', size, marginMode: s.margin_mode || 'isolated', credentialId: this.apiId }
+    })
+    await postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+      strategy_id: s.id,
+      level: 'info',
+      message: 'WS事件：止盈后按信号重新开仓',
+      data: { symbol, side, size }
     })
   }
 }

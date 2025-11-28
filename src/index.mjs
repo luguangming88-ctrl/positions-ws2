@@ -148,6 +148,7 @@ export class PositionsDO {
       const symbol = url.searchParams.get('symbol') || ''
       if (!symbol) return cors('symbol required', { status: 400 })
       const instId = symbolToInstId(symbol)
+      await this.ensureStrategyForSymbol(symbol)
       await this.subscribePublic(instId)
       return cors('symbol-started')
     }
@@ -192,6 +193,15 @@ export class PositionsDO {
       })
     } catch (_) {}
     this.connectPublicWS()
+  }
+  async ensureStrategyForSymbol(symbol) {
+    const existing = this.strategies.get(symbol)
+    if (existing && existing.length) return
+    if (!this.apiId) return
+    const headers = { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` }
+    const data = await getJson(`${this.env.SUPABASE_URL}/rest/v1/strategies?api_credential_id=eq.${this.apiId}&symbol=eq.${encodeURIComponent(symbol)}&select=id,symbol,status,profit_ratio,loss_stop_ratio,margin_mode`, headers)
+    const rows = (data || []).filter(r => r.status === 'running' || r.status === 'paused')
+    if (rows.length) this.strategies.set(symbol, rows)
   }
 
   connectWS() {
@@ -285,7 +295,11 @@ export class PositionsDO {
       if (pos <= 0) continue
       const instId = p.instId
       const symbol = instIdToSymbol(instId)
-      const list = this.strategies.get(symbol) || []
+      let list = this.strategies.get(symbol) || []
+      if (!list.length) {
+        await this.ensureStrategyForSymbol(symbol)
+        list = this.strategies.get(symbol) || []
+      }
       if (!list.length) continue
       const uplRatio = parseFloat(p.uplRatio || '0')
       const posSide = p.posSide

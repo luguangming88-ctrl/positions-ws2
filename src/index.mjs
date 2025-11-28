@@ -20,6 +20,23 @@ async function postJson(url, headers, body) {
   return await r.json()
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+async function postJsonRetry(url, headers, body, opts = {}) {
+  const { retries = 3, baseDelay = 500, maxDelay = 60000 } = opts
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+    if (res.ok) return await res.json()
+    if (res.status === 429 || res.status >= 500) {
+      const jitter = Math.floor(Math.random() * 300)
+      const delay = Math.min(baseDelay * Math.pow(2, attempt) + jitter, maxDelay)
+      await sleep(delay)
+      continue
+    }
+    throw new Error(`HTTP ${res.status}`)
+  }
+}
+
 export class PositionsDO {
   constructor(state, env) {
     this.state = state
@@ -156,7 +173,8 @@ export class PositionsDO {
         }
         const profitThresh = (()=>{ const v = Number(s.profit_ratio||0); return v>1? v/100 : v })()
         if (uplRatio >= profitThresh) {
-          setTimeout(()=>{ this.closePosition(s, symbol, posSide).catch(()=>{}) }, 2000)
+          const jitter = Math.floor(Math.random() * 200)
+          setTimeout(()=>{ this.closePosition(s, symbol, posSide).catch(()=>{}) }, 500 + jitter)
           this.lastAction.set(instId, Date.now())
           console.log('take-profit-trigger', { symbol, uplRatio, profitThresh, posSide })
         }
@@ -166,11 +184,11 @@ export class PositionsDO {
 
   async closePosition(s, symbol, posSide) {
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` }
-    await postJson(`${this.env.SUPABASE_URL}/functions/v1/okx-trading`, headers, {
+    await postJsonRetry(`${this.env.SUPABASE_URL}/functions/v1/okx-trading`, headers, {
       action: 'closePosition',
       data: { symbol, posSide, marginMode: s.margin_mode || 'isolated', credentialId: this.apiId }
     })
-    await postJson(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+    await postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
       strategy_id: s.id,
       level: 'info',
       message: 'WS事件：达到止盈阈值，执行市价全平',
@@ -181,11 +199,11 @@ export class PositionsDO {
   async openHedge(s, symbol, posSide, size) {
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` }
     const side = posSide === 'long' ? 'sell' : 'buy'
-    await postJson(`${this.env.SUPABASE_URL}/functions/v1/okx-trading`, headers, {
+    await postJsonRetry(`${this.env.SUPABASE_URL}/functions/v1/okx-trading`, headers, {
       action: 'placeOrder',
       data: { strategyId: s.id, symbol, side, orderType: 'market', size, marginMode: s.margin_mode || 'isolated', credentialId: this.apiId }
     })
-    await postJson(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
+    await postJsonRetry(`${this.env.SUPABASE_URL}/rest/v1/strategy_logs`, { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, {
       strategy_id: s.id,
       level: 'warning',
       message: 'WS事件：达到对冲亏损阈值，开对冲仓',

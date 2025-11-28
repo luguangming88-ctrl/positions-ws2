@@ -57,6 +57,7 @@ export class PositionsDO {
 
   async fetch(request) {
     const url = new URL(request.url)
+    if (request.method === 'OPTIONS') return cors('', { status: 204 })
     if (url.pathname === '/start') {
       this.apiId = url.searchParams.get('apiId') || ''
       ;(async () => {
@@ -69,30 +70,30 @@ export class PositionsDO {
           this.timer = setInterval(() => this.loadStrategies().catch(() => {}), 60000)
         } catch (_) {}
       })()
-      return new Response('started')
+      return cors('started')
     }
     if (url.pathname === '/refresh') {
       await this.loadStrategies()
-      return new Response('refreshed')
+      return cors('refreshed')
     }
     if (url.pathname === '/status') {
       const symbols = Array.from(this.strategies.keys())
       const body = { apiId: this.apiId, privateConnected: !!this.ws, publicConnected: !!this.pub, symbols }
-      return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+      return cors(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
     }
     if (url.pathname === '/start-symbol') {
       const symbol = url.searchParams.get('symbol') || ''
-      if (!symbol) return new Response('symbol required', { status: 400 })
+      if (!symbol) return cors('symbol required', { status: 400 })
       const instId = symbolToInstId(symbol)
       await this.subscribePublic(instId)
-      return new Response('symbol-started')
+      return cors('symbol-started')
     }
     if (url.pathname === '/stop') {
       if (this.ws) this.ws.close()
       if (this.timer) clearInterval(this.timer)
-      return new Response('stopped')
+      return cors('stopped')
     }
-    return new Response('ok')
+    return cors('ok')
   }
 
   async loadCredentials() {
@@ -271,3 +272,12 @@ export default {
   async scheduled(event, env, ctx) {}
 }
 
+function cors(body, init = {}) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    ...init.headers
+  }
+  return new Response(body, { ...init, headers })
+}

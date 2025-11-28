@@ -221,7 +221,7 @@ export class PositionsDO {
         const now = Date.now()
         const last = this.lastAction.get(instId) || 0
         if (now - last < 2000) continue
-        const lossThresh = (()=>{ const v = Number(s.loss_stop_ratio||0); return v>1? v/100 : v })()
+        const lossThresh = (()=>{ const v = Number(s.loss_stop_ratio||0); return v/100 })()
         if (lossThresh && uplRatio <= -lossThresh) {
           const dir = this.candleDir.get(symbol)
           const needOpp = (posSide === 'long' && dir === 'down') || (posSide === 'short' && dir === 'up')
@@ -233,7 +233,7 @@ export class PositionsDO {
             continue
           }
         }
-        const profitThresh = (()=>{ const v = Number(s.profit_ratio||0); return v>1? v/100 : v })()
+        const profitThresh = (()=>{ const v = Number(s.profit_ratio||0); return v/100 })()
         if (uplRatio >= profitThresh) {
           const jitter = Math.floor(Math.random() * 200)
           const size = Math.abs(parseFloat(p.pos || '0'))

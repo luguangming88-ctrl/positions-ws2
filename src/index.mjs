@@ -98,6 +98,15 @@ export class PositionsDO {
       await this.loadStrategies()
       return cors('refreshed')
     }
+    if (url.pathname === '/refresh-and-subscribe-all') {
+      await this.loadStrategies()
+      const syms = Array.from(this.strategies.keys())
+      for (const s of syms) {
+        const instId = symbolToInstId(s)
+        await this.subscribePublic(instId)
+      }
+      return cors('refreshed-and-subscribed')
+    }
     if (url.pathname === '/status') {
       if (this.apiId && !this.creds && this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_ROLE_KEY) {
         try { await this.loadCredentials() } catch (_) {}

@@ -32,8 +32,8 @@ if (!r.ok) throw new Error('strategy-exec HTTP ' + r.status)
 
 function setupHeartbeat(ws) {
 clearInterval(ws._hb)
-ws. hb = setInterval(() => {
-try { ws.send(JSON.stringify({ op: 'ping' })) } catch ( ) {}
+ws._hb = setInterval(() => {
+try { ws.ping() } catch { /* ignore */ }
 }, 20000)
 }
 

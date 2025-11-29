@@ -11,6 +11,9 @@ SUPABASE_FUNCTION_URL,
 SUPABASE_SERVICE_ROLE_KEY,
 } = process.env
 
+let priv = null
+let pub = null
+
 function tsISO () { return new Date().toISOString() }
 function sign (message, secret) { return crypto.createHmac('sha256', secret).update(message).digest('base64') }
 function instIdToSymbol (instId) { return instId.replace('-SWAP', '').replace('-', '/') + ':USDT' }
@@ -27,22 +30,31 @@ body: JSON.stringify(payload),
 if (!r.ok) throw new Error('strategy-exec HTTP ' + r.status)
 }
 
+function setupHeartbeat(ws) {
+clearInterval(ws._hb)
+ws. hb = setInterval(() => {
+try { ws.send(JSON.stringify({ op: 'ping' })) } catch ( ) {}
+}, 20000)
+}
+
 function startPrivateWS () {
+if (priv && priv.readyState === 1) return
 const ws = new WebSocket('wss://ws.okx.com/ws/v5/private')
+priv = ws
 ws.on('open', () => {
 const ts = tsISO()
 const sig = sign(ts + 'GET' + '/users/self/verify', OKX_API_SECRET)
-ws.send(JSON.stringify({
-op: 'login',
-args: [{ apiKey: OKX_API_KEY, passphrase: OKX_PASSPHRASE, timestamp: ts, sign: sig }],
-}))
+ws.send(JSON.stringify({ op: 'login', args: [{ apiKey: OKX_API_KEY, passphrase: OKX_PASSPHRASE, timestamp: ts, sign: sig }] }))
 ws.send(JSON.stringify({ op: 'subscribe', args: [{ channel: 'positions', instType: 'SWAP' }] }))
+setupHeartbeat(ws)
 console.log('private-ws-open')
 })
 ws.on('message', async (data) => {
 try {
 const msg = JSON.parse(data)
 if (msg.event === 'error') return
+if (msg.event === 'login') return
+if (msg.op === 'pong' || msg.event === 'pong') return
 if (msg.arg?.channel !== 'positions') return
 const rows = msg.data || []
 for (const p of rows) {
@@ -54,22 +66,26 @@ await postStrategyExec({ apiId: API_ID, symbol, posSide: p.posSide, size: pos, u
 }
 } catch (_) {}
 })
-ws.on('close', () => setTimeout(startPrivateWS, 2000))
-ws.on('error', () => setTimeout(startPrivateWS, 2000))
+ws.on('close', () => { clearInterval(ws._hb); priv = null; setTimeout(startPrivateWS, 2000) })
+ws.on('error', () => { clearInterval(ws. hb); try { ws.close() } catch ( ) {} priv = null; setTimeout(startPrivateWS, 2000) })
 }
 
 function startPublicWS () {
 const list = SYMBOLS.split(',').map(s => s.trim()).filter(Boolean)
 if (!list.length) return
+if (pub && pub.readyState === 1) return
 const ws = new WebSocket('wss://ws.okx.com/ws/v5/public')
+pub = ws
 ws.on('open', () => {
 const args = list.map(instId => ({ channel: 'candle1H', instId }))
 ws.send(JSON.stringify({ op: 'subscribe', args }))
+setupHeartbeat(ws)
 console.log('public-ws-open', args)
 })
 ws.on('message', async (data) => {
 try {
 const msg = JSON.parse(data)
+if (msg.op === 'pong' || msg.event === 'pong') return
 if (msg.arg?.channel && String(msg.arg.channel).startsWith('candle')) {
 const i = msg.arg.instId
 const sym = instIdToSymbol(i)
@@ -83,13 +99,9 @@ await postStrategyExec({ apiId: API_ID, symbol: sym, candleDir, ts: Date.now() }
 }
 } catch (_) {}
 })
-ws.on('close', () => setTimeout(startPublicWS, 2000))
-ws.on('error', () => setTimeout(startPublicWS, 2000))
+ws.on('close', () => { clearInterval(ws._hb); pub = null; setTimeout(startPublicWS, 2000) })
+ws.on('error', () => { clearInterval(ws. hb); try { ws.close() } catch ( ) {} pub = null; setTimeout(startPublicWS, 2000) })
 }
-
-if (!OKX_API_KEY || !OKX_API_SECRET || !OKX_PASSPHRASE) throw new Error('Missing OKX credentials')
-if (!SUPABASE_FUNCTION_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error('Missing Supabase function config')
-if (!API_ID) throw new Error('Missing API_ID')
 
 startPrivateWS()
 startPublicWS()

@@ -1,5 +1,6 @@
-1. import crypto from 'crypto'
-   import WebSocket from 'ws'
+const crypto = require('crypto')
+const WebSocket = require('ws')
+
 const {
 OKX_API_KEY,
 OKX_API_SECRET,
@@ -10,11 +11,11 @@ SUPABASE_FUNCTION_URL,
 SUPABASE_SERVICE_ROLE_KEY,
 } = process.env
 
-function tsISO() { return new Date().toISOString() }
-function sign(message, secret) { return crypto.createHmac('sha256', secret).update(message).digest('base64') }
-function instIdToSymbol(instId) { return instId.replace('-SWAP','').replace('-', '/')+':USDT' }
+function tsISO () { return new Date().toISOString() }
+function sign (message, secret) { return crypto.createHmac('sha256', secret).update(message).digest('base64') }
+function instIdToSymbol (instId) { return instId.replace('-SWAP', '').replace('-', '/') + ':USDT' }
 
-async function postStrategyExec(payload) {
+async function postStrategyExec (payload) {
 const r = await fetch(SUPABASE_FUNCTION_URL, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json', Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY} },
@@ -23,7 +24,7 @@ body: JSON.stringify(payload)
 if (!r.ok) throw new Error( strategy-exec HTTP ${r.status} )
 }
 
-function startPrivateWS() {
+function startPrivateWS () {
 const ws = new WebSocket('wss://ws.okx.com/ws/v5/private')
 ws.on('open', () => {
 const ts = tsISO()
@@ -51,7 +52,7 @@ ws.on('close', () => setTimeout(startPrivateWS, 2000))
 ws.on('error', () => setTimeout(startPrivateWS, 2000))
 }
 
-function startPublicWS() {
+function startPublicWS () {
 const list = SYMBOLS.split(',').map(s => s.trim()).filter(Boolean)
 if (!list.length) return
 const ws = new WebSocket('wss://ws.okx.com/ws/v5/public')

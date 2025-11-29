@@ -20,11 +20,11 @@ const r = await fetch(SUPABASE_FUNCTION_URL, {
 method: 'POST',
 headers: {
 'Content-Type': 'application/json',
-Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY} `,
+Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
 },
 body: JSON.stringify(payload),
 })
-if (!r.ok) throw new Error( `strategy-exec HTTP ${r.status} `)
+if (!r.ok) throw new Error('strategy-exec HTTP ' + r.status)
 }
 
 function startPrivateWS () {

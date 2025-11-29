@@ -18,8 +18,11 @@ function instIdToSymbol (instId) { return instId.replace('-SWAP', '').replace('-
 async function postStrategyExec (payload) {
 const r = await fetch(SUPABASE_FUNCTION_URL, {
 method: 'POST',
-headers: { 'Content-Type': 'application/json', Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY} },
-body: JSON.stringify(payload)
+headers: {
+'Content-Type': 'application/json',
+Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY} ,
+},
+body: JSON.stringify(payload),
 })
 if (!r.ok) throw new Error( strategy-exec HTTP ${r.status} )
 }
@@ -29,7 +32,10 @@ const ws = new WebSocket('wss://ws.okx.com/ws/v5/private')
 ws.on('open', () => {
 const ts = tsISO()
 const sig = sign(ts + 'GET' + '/users/self/verify', OKX_API_SECRET)
-ws.send(JSON.stringify({ op: 'login', args: [{ apiKey: OKX_API_KEY, passphrase: OKX_PASSPHRASE, timestamp: ts, sign: sig }] }))
+ws.send(JSON.stringify({
+op: 'login',
+args: [{ apiKey: OKX_API_KEY, passphrase: OKX_PASSPHRASE, timestamp: ts, sign: sig }],
+}))
 ws.send(JSON.stringify({ op: 'subscribe', args: [{ channel: 'positions', instType: 'SWAP' }] }))
 console.log('private-ws-open')
 })
